@@ -50,7 +50,6 @@ body {
   overflow-x: hidden;
 }
 
-/* ── NOISE TEXTURE ─────────────────────────────────────────── */
 body::before {
   content: '';
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
@@ -58,7 +57,6 @@ body::before {
   opacity: 0.4;
 }
 
-/* ── GRID BG ─────────────────────────────────────────────── */
 body::after {
   content: '';
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
@@ -363,7 +361,7 @@ main {
 
 .bcard-top {
   display: flex; align-items: center; cursor: pointer; user-select: none;
-  padding-left: 3px; /* stripe offset */
+  padding-left: 3px;
 }
 
 .bcard-num {
@@ -394,7 +392,6 @@ main {
   padding: 12px 16px; flex-shrink: 0;
 }
 
-/* Score buttons */
 .sbtn-group { display: flex; gap: 4px; }
 .sbtn {
   width: 34px; height: 34px; border-radius: 8px;
@@ -468,22 +465,6 @@ main {
   display: flex; gap: 10px; flex-wrap: wrap;
   margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border);
 }
-
-/* ── WEBHOOK CONFIG ──────────────────────────────────────── */
-.webhook-row {
-  display: flex; gap: 10px; align-items: end; flex-wrap: wrap;
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 18px 22px; margin-bottom: 24px;
-  box-shadow: var(--shadow-sm);
-}
-.webhook-row .field { flex: 1; min-width: 260px; }
-.webhook-status {
-  font-family: var(--ff-mono); font-size: 10px; letter-spacing: 0.06em;
-  padding: 5px 12px; border-radius: 50px;
-}
-.webhook-status.ok   { background: var(--emerald-light); color: var(--emerald); }
-.webhook-status.fail { background: var(--red-light); color: var(--red); }
-.webhook-status.idle { background: var(--surface2); color: var(--dim); }
 
 /* ── TOAST ───────────────────────────────────────────────── */
 .toast {
@@ -598,15 +579,6 @@ main {
     </div>
   </div>
 
-  <!-- Webhook Config -->
-  <div class="webhook-row" id="webhook-row" style="display:none;">
-    <div class="field">
-      <label>Google Sheets Webhook URL</label>
-      <input type="url" id="webhook-url" placeholder="https://script.google.com/macros/s/AKfycbybU2H-pMlBAXLFVgUnMHjph88vrqOSCuK56O9zCO2wTYS2CqCgAhNMReehGV1JwkKTUQ/exec" oninput="saveWebhook()">
-    </div>
-    <span class="webhook-status idle" id="webhook-status">Not configured</span>
-  </div>
-
   <!-- Session Bar -->
   <div class="session-bar" id="session-bar">
     <div class="sbi"><span class="sbi-l">Agent</span><span class="sbi-v" id="sb-agent">—</span></div>
@@ -672,6 +644,11 @@ main {
 <div class="toast" id="toast"></div>
 
 <script>
+// ════════════════════════════════════════════════════════
+//  ▶  PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+// ════════════════════════════════════════════════════════
+const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbybU2H-pMlBAXLFVgUnMHjph88vrqOSCuK56O9zCO2wTYS2CqCgAhNMReehGV1JwkKTUQ/exec";
+
 // ════════════════════════════════════════════════════════
 //  BEHAVIORS DATA
 // ════════════════════════════════════════════════════════
@@ -800,8 +777,6 @@ let notes   = {};
 let history = [];
 try { history = JSON.parse(localStorage.getItem('cm_history_v2')) || []; } catch(e) { history = []; }
 
-let webhookUrl = localStorage.getItem('cm_webhook') || '';
-
 // ════════════════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════════════════
@@ -812,29 +787,35 @@ document.getElementById('hdr-date').textContent =
 //  SESSION
 // ════════════════════════════════════════════════════════
 function startSession() {
-  const agent    = document.getElementById('agent-name').value.trim();
-  const evaluator= document.getElementById('evaluator-name').value.trim();
-  const type     = document.getElementById('session-type').value;
+  const agent     = document.getElementById('agent-name').value.trim();
+  const evaluator = document.getElementById('evaluator-name').value.trim();
+  const type      = document.getElementById('session-type').value;
   if (!agent || !evaluator) { showToast('Enter both Agent and Evaluator names', 'err'); return; }
 
   session = { agent, evaluator, type, startTime: new Date().toISOString() };
   scores = {}; notes = {};
   BEHAVIORS.forEach(b => { scores[b.id] = null; notes[b.id] = ''; });
 
+  // Update session bar
   document.getElementById('sb-agent').textContent = agent;
   document.getElementById('sb-eval').textContent  = evaluator;
-  document.getElementById('sb-type').textContent  = { live:'Live Monitoring', recorded:'Recorded Review', coaching:'Coaching', review:'Periodic Review' }[type];
+  document.getElementById('sb-type').textContent  = {
+    live:'Live Monitoring', recorded:'Recorded Review',
+    coaching:'Coaching', review:'Periodic Review'
+  }[type];
+
+  // Show session bar
   document.getElementById('session-bar').classList.add('show');
-  document.getElementById('eval-area').classList.add('show');
 
-  // Webhook row
-  const wr = document.getElementById('webhook-row');
-  wr.style.display = 'flex';
-  document.getElementById('webhook-url').value = webhookUrl;
-  updateWebhookStatus();
+  // Show eval area
+  document.getElementById('eval-area').style.display = 'block';
 
+  // Render behaviors
   renderBehaviors();
   updateMeta();
+
+  // Scroll to session bar
+  document.getElementById('session-bar').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function resetSession() {
@@ -875,7 +856,7 @@ function buildCard(b, num) {
   card.className = 'bcard';
   card.id = 'card_' + b.id;
 
-  const posTag = b.positive ? `<span class="positive-tag">✦ Positive</span>` : '';
+  const posTag = b.positive ? `<span class="positive-tag">+ Positive</span>` : '';
 
   card.innerHTML = `
     <div class="bcard-stripe"></div>
@@ -891,7 +872,7 @@ function buildCard(b, num) {
             <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
           </button>
           <button class="sbtn" data-s="1" onclick="setScore('${b.id}',1)" title="Partial">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" opacity=".5"/></svg>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/></svg>
           </button>
           <button class="sbtn" data-s="2" onclick="setScore('${b.id}',2)" title="Pass">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>
@@ -908,7 +889,7 @@ function buildCard(b, num) {
         <div class="dblock"><div class="dl">Impact</div><p>${b.impact}</p></div>
         <div class="dblock"><div class="dl">Detection Signal</div><p>${b.detect}</p></div>
         <div class="dblock dnote"><label>Evaluator Notes</label><textarea onchange="notes['${b.id}']=this.value" oninput="notes['${b.id}']=this.value"></textarea></div>
-        <div class="hint-box"><div class="hl">💡 TL Monitoring Hint</div><p>${b.hint}</p></div>
+        <div class="hint-box"><div class="hl">TL Monitoring Hint</div><p>${b.hint}</p></div>
       </div>
     </div>`;
 
@@ -965,34 +946,16 @@ function updateMeta() {
 }
 
 // ════════════════════════════════════════════════════════
-//  WEBHOOK
-// ════════════════════════════════════════════════════════
-function saveWebhook() {
-  webhookUrl = document.getElementById('webhook-url').value.trim();
-  localStorage.setItem('cm_webhook', webhookUrl);
-  updateWebhookStatus();
-}
-
-function updateWebhookStatus() {
-  const el = document.getElementById('webhook-status');
-  if (!webhookUrl) {
-    el.textContent = 'Not configured'; el.className = 'webhook-status idle';
-  } else {
-    el.textContent = 'URL configured ✓'; el.className = 'webhook-status ok';
-  }
-}
-
-// ════════════════════════════════════════════════════════
 //  BUILD PAYLOAD
 // ════════════════════════════════════════════════════════
 function buildPayload() {
-  const rated   = BEHAVIORS.filter(b => scores[b.id] !== null);
-  const actual  = rated.reduce((s, b) => s + scores[b.id], 0);
-  const pct     = rated.length ? Math.round((actual / (rated.length * 2)) * 100) : 0;
-  const grade   = pct >= 80 ? 'Satisfactory' : pct >= 60 ? 'Needs Work' : 'Critical';
-  const fails   = rated.filter(b => scores[b.id] === 0).map(b => b.id);
-  const partials= rated.filter(b => scores[b.id] === 1).map(b => b.id);
-  const passes  = rated.filter(b => scores[b.id] === 2).map(b => b.id);
+  const rated    = BEHAVIORS.filter(b => scores[b.id] !== null);
+  const actual   = rated.reduce((s, b) => s + scores[b.id], 0);
+  const pct      = rated.length ? Math.round((actual / (rated.length * 2)) * 100) : 0;
+  const grade    = pct >= 80 ? 'Satisfactory' : pct >= 60 ? 'Needs Work' : 'Critical';
+  const fails    = rated.filter(b => scores[b.id] === 0).map(b => b.id);
+  const partials = rated.filter(b => scores[b.id] === 1).map(b => b.id);
+  const passes   = rated.filter(b => scores[b.id] === 2).map(b => b.id);
 
   return {
     sessionDate:  new Date().toLocaleString('en-GB'),
@@ -1020,13 +983,10 @@ async function submitEval() {
   if (rated.length === 0) { showToast('Rate at least one behavior first', 'err'); return; }
 
   const payload = buildPayload();
-
-  // Save locally first
   saveToHistory(payload);
 
-  // Send to Sheets if URL configured
-  if (!webhookUrl) {
-    showToast('No Webhook URL — saved locally only', '');
+  if (!WEBHOOK_URL || WEBHOOK_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
+    showToast('Webhook URL not set in code — saved locally only', '');
     showResultModal(payload);
     return;
   }
@@ -1036,19 +996,14 @@ async function submitEval() {
   btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Saving…`;
 
   try {
-    const res = await fetch(webhookUrl, {
+    await fetch(WEBHOOK_URL, {
       method: 'POST', mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    // no-cors returns opaque — treat as success
-    showToast('Saved to Google Sheets ✓', 'ok');
-    document.getElementById('webhook-status').textContent = 'Last save: ' + new Date().toLocaleTimeString('en-GB');
-    document.getElementById('webhook-status').className   = 'webhook-status ok';
+    showToast('Saved to Google Sheets', 'ok');
   } catch(err) {
-    showToast('Sheet save failed — check URL', 'err');
-    document.getElementById('webhook-status').textContent = 'Save failed ✗';
-    document.getElementById('webhook-status').className   = 'webhook-status fail';
+    showToast('Sheet save failed — check webhook URL', 'err');
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"/></svg> Save to Google Sheets`;
@@ -1062,7 +1017,7 @@ function submitEvalLocal() {
   if (rated.length === 0) { showToast('Rate at least one behavior first', 'err'); return; }
   const payload = buildPayload();
   saveToHistory(payload);
-  showToast('Saved locally ✓', 'ok');
+  showToast('Saved locally', 'ok');
   showResultModal(payload);
 }
 
@@ -1076,10 +1031,10 @@ function saveToHistory(payload) {
 //  RESULT MODAL
 // ════════════════════════════════════════════════════════
 function showResultModal(entry) {
-  const sc     = entry.score;
-  const color  = sc >= 80 ? 'var(--emerald)' : sc >= 60 ? 'var(--amber)' : 'var(--red)';
-  const grade  = sc >= 80 ? 'SATISFACTORY' : sc >= 60 ? 'NEEDS WORK' : 'CRITICAL';
-  const bkgd   = sc >= 80 ? 'var(--emerald-light)' : sc >= 60 ? 'var(--amber-light)' : 'var(--red-light)';
+  const sc    = entry.score;
+  const color = sc >= 80 ? 'var(--emerald)' : sc >= 60 ? 'var(--amber)' : 'var(--red)';
+  const grade = sc >= 80 ? 'SATISFACTORY'   : sc >= 60 ? 'NEEDS WORK'   : 'CRITICAL';
+  const bkgd  = sc >= 80 ? 'var(--emerald-light)' : sc >= 60 ? 'var(--amber-light)' : 'var(--red-light)';
 
   const fails    = (entry.fails||[]).map(id => BEHAVIORS.find(b => b.id===id)).filter(Boolean);
   const partials = (entry.partials||[]).map(id => BEHAVIORS.find(b => b.id===id)).filter(Boolean);
@@ -1126,8 +1081,7 @@ function closeModal() { document.getElementById('modal-overlay').classList.remov
 function newSession() {
   session = null; scores = {}; notes = {};
   document.getElementById('session-bar').classList.remove('show');
-  document.getElementById('eval-area').classList.remove('show');
-  document.getElementById('webhook-row').style.display = 'none';
+  document.getElementById('eval-area').style.display = 'none';
   document.getElementById('agent-name').value = '';
   document.getElementById('evaluator-name').value = '';
   document.getElementById('behaviors-container').innerHTML = '';
@@ -1152,7 +1106,7 @@ function renderHistory() {
   list.innerHTML = history.map((e, i) => {
     const prev  = history[i+1];
     const diff  = prev ? e.score - prev.score : null;
-    const delta = diff === null ? '' : diff === 0 ? '= 0%' : diff > 0 ? `▲ ${diff}%` : `▼ ${Math.abs(diff)}%`;
+    const delta = diff === null ? '' : diff === 0 ? '= 0%' : diff > 0 ? `+${diff}%` : `-${Math.abs(diff)}%`;
     const dc    = diff === null ? 'var(--dim)' : diff > 0 ? 'var(--emerald)' : diff < 0 ? 'var(--red)' : 'var(--muted)';
     const sc    = e.score >= 80 ? 'var(--emerald)' : e.score >= 60 ? 'var(--amber)' : 'var(--red)';
     return `<div class="hist-entry" onclick="showHistDetail(${e.id})">
