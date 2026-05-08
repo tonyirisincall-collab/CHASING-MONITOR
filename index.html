@@ -648,7 +648,7 @@ main {
 // ════════════════════════════════════════════════════════
 //  ▶  PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
 // ════════════════════════════════════════════════════════
-const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzf6oQpqQOqvwnEv7VzcSHvz16_-XmATEkv4_t5fI1ttOmqmkEf3PW712VxaAzBZd5W1Q/exec";
+const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxjXQiYKgzvTtEA1cPem-phaCHpARdaTvvJMx8gTxIM1szf56X_EfywRrFGaqJPHqJCiQ/exec";
 
 // ════════════════════════════════════════════════════════
 //  BEHAVIORS DATA
@@ -977,7 +977,9 @@ function buildPayload() {
 }
 
 // ════════════════════════════════════════════════════════
-//  SUBMIT (with Google Sheets)
+//  SUBMIT — sends data to GAS via GET + URL param
+//  GAS doGet() reads e.parameter.data (JSON string)
+//  This avoids ALL CORS preflight issues from GitHub Pages
 // ════════════════════════════════════════════════════════
 async function submitEval() {
   const rated = BEHAVIORS.filter(b => scores[b.id] !== null);
@@ -997,16 +999,12 @@ async function submitEval() {
   btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Saving…`;
 
   try {
-    // GAS Web Apps require no-cors. Sending Content-Type: application/json
-    // triggers a preflight which GAS blocks — omit the header instead.
-    // GAS reads e.postData.contents from the raw body regardless.
-    await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify(payload)
-    });
-    // no-cors returns opaque response — if fetch didn't throw, treat as success
-    showToast('Saved to Google Sheets', 'ok');
+    // Send JSON as a GET parameter — GAS reads e.parameter.data
+    // GET requests are simple requests: no CORS preflight, no blocked headers
+    const url = WEBHOOK_URL + '?data=' + encodeURIComponent(JSON.stringify(payload));
+    await fetch(url, { method: 'GET', mode: 'no-cors' });
+    // Opaque response — if no throw, GAS received it
+    showToast('Saved to Google Sheets ✓', 'ok');
   } catch(err) {
     showToast('Sheet save failed — check webhook URL', 'err');
   } finally {
